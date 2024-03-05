@@ -43,7 +43,7 @@ function Set-WindowsDNS {
     }
 }
 #>
-# Function to set DNS based on selected provider
+# Function to set DNS based on selected provider with DHCP or current settings fallback
 function Set-WindowsDNS {
     param(
         [string]$DNSserver
