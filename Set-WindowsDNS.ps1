@@ -2,6 +2,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Web.Extensions
 
 # Function to set DNS based on selected provider
+# Function to set DNS based on selected provider
 function Set-WindowsDNS {
     param(
         [string]$DNSserver
@@ -18,20 +19,10 @@ function Set-WindowsDNS {
             Write-Host "Setting DNS to $DNSserver on $($Adapter.Name)"
 
             if ($DNSserver -eq "DHCP") {
-                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ResetServerAddresses -AddressFamily IPv4
-                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ResetServerAddresses -AddressFamily IPv6
+                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ResetServerAddresses
             }
             else {
-                $dnsConfigIPv4 = Get-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -AddressFamily IPv4
-                $primaryDnsIPv4 = $dnsConfigIPv4 | Select-Object -ExpandProperty ServerAddresses | Select-Object -First 1
-                $secondaryDnsIPv4 = $dnsConfigIPv4 | Select-Object -ExpandProperty ServerAddresses | Select-Object -Last 1
-
-                $dnsConfigIPv6 = Get-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -AddressFamily IPv6
-                $primaryDnsIPv6 = $dnsConfigIPv6 | Select-Object -ExpandProperty ServerAddresses | Select-Object -First 1
-                $secondaryDnsIPv6 = $dnsConfigIPv6 | Select-Object -ExpandProperty ServerAddresses | Select-Object -Last 1
-
-                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses $primaryDnsIPv4, $secondaryDnsIPv4 -AddressFamily IPv4
-                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses $primaryDnsIPv6, $secondaryDnsIPv6 -AddressFamily IPv6
+                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses $DNSserver
             }
         }
     }
