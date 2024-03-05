@@ -1,7 +1,48 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Web.Extensions
 
-# Function to set DNS based on selected provider
+# Does not work on Win10 but works on Win11
+<#
+function Set-WindowsDNS {
+    param(
+        [string]$DNSserver
+    )
+
+    if ($DNSserver -eq "Default") {
+        return
+    }
+
+    try {
+        $Adapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
+
+        foreach ($Adapter in $Adapters) {
+            Write-Host "Setting DNS to $DNSserver on $($Adapter.Name)"
+
+            if ($DNSserver -eq "DHCP") {
+                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ResetServerAddresses -AddressFamily IPv4
+                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ResetServerAddresses -AddressFamily IPv6
+            }
+            else {
+                $dnsConfigIPv4 = Get-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -AddressFamily IPv4
+                $primaryDnsIPv4 = $dnsConfigIPv4 | Select-Object -ExpandProperty ServerAddresses | Select-Object -First 1
+                $secondaryDnsIPv4 = $dnsConfigIPv4 | Select-Object -ExpandProperty ServerAddresses | Select-Object -Last 1
+
+                $dnsConfigIPv6 = Get-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -AddressFamily IPv6
+                $primaryDnsIPv6 = $dnsConfigIPv6 | Select-Object -ExpandProperty ServerAddresses | Select-Object -First 1
+                $secondaryDnsIPv6 = $dnsConfigIPv6 | Select-Object -ExpandProperty ServerAddresses | Select-Object -Last 1
+
+                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses $primaryDnsIPv4, $secondaryDnsIPv4 -AddressFamily IPv4
+                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses $primaryDnsIPv6, $secondaryDnsIPv6 -AddressFamily IPv6
+            }
+        }
+    }
+    catch {
+        Write-Warning "Unable to set DNS Provider due to an unhandled exception"
+        Write-Warning $_.Exception.Message
+        Write-Warning $_.Exception.StackTrace
+    }
+}
+#>
 # Function to set DNS based on selected provider
 function Set-WindowsDNS {
     param(
@@ -19,10 +60,30 @@ function Set-WindowsDNS {
             Write-Host "Setting DNS to $DNSserver on $($Adapter.Name)"
 
             if ($DNSserver -eq "DHCP") {
-                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ResetServerAddresses
+                netsh interface ip set dns name=$($Adapter.Name) source=dhcp
+                netsh interface ipv6 set dns name=$($Adapter.Name) source=dhcp
             }
             else {
-                Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses $DNSserver
+                $currentIPv4 = netsh interface ip show dns $($Adapter.Name) | Select-String "DNS servers configured through DHCP"
+                $currentIPv6 = netsh interface ipv6 show dns $($Adapter.Name) | Select-String "DNS servers configured through DHCP"
+
+                if ($currentIPv4) {
+                    netsh interface ip set dns name=$($Adapter.Name) source=static addr=$DNSserver
+                }
+                else {
+                    $currentIPv4Addr = (netsh interface ip show dns $($Adapter.Name) | Select-String "^\s*Address\s*:" -Context 0,1).Context.PostContext -replace "^\s*Address\s*:", ""
+                    netsh interface ip set dns name=$($Adapter.Name) source=static addr=$DNSserver index=1
+                    netsh interface ip add dns name=$($Adapter.Name) addr=$currentIPv4Addr index=2
+                }
+
+                if ($currentIPv6) {
+                    netsh interface ipv6 set dns name=$($Adapter.Name) source=static addr=$DNSserver
+                }
+                else {
+                    $currentIPv6Addr = (netsh interface ipv6 show dns $($Adapter.Name) | Select-String "^\s*Address\s*:" -Context 0,1).Context.PostContext -replace "^\s*Address\s*:", ""
+                    netsh interface ipv6 set dns name=$($Adapter.Name) source=static addr=$DNSserver index=1
+                    netsh interface ipv6 add dns name=$($Adapter.Name) addr=$currentIPv6Addr index=2
+                }
             }
         }
     }
@@ -32,6 +93,7 @@ function Set-WindowsDNS {
         Write-Warning $_.Exception.StackTrace
     }
 }
+
 
 # Read DNS servers from DNS.json
 $dnsConfig = Get-Content -Raw -Path "DNS.json" | ConvertFrom-Json
