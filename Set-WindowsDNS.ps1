@@ -43,7 +43,7 @@ function Set-WindowsDNS {
     }
 }
 #>
-# Function to set DNS based on selected provider with DHCP or current settings fallback
+# Function to set DNS based on selected provider with fallback
 function Set-WindowsDNS {
     param(
         [string]$DNSserver
@@ -64,6 +64,9 @@ function Set-WindowsDNS {
                 netsh interface ipv6 set dns name=$($Adapter.Name) source=dhcp
             }
             else {
+                $dnsConfig = Get-Content -Raw -Path "DNS.json" | ConvertFrom-Json
+                $secondaryDNS = $dnsConfig.configs.dns.$DNSserver.Secondary
+
                 $currentIPv4 = netsh interface ip show dns $($Adapter.Name) | Select-String "DNS servers configured through DHCP"
                 $currentIPv6 = netsh interface ipv6 show dns $($Adapter.Name) | Select-String "DNS servers configured through DHCP"
 
@@ -93,7 +96,6 @@ function Set-WindowsDNS {
         Write-Warning $_.Exception.StackTrace
     }
 }
-
 
 # Read DNS servers from DNS.json
 $dnsConfig = Get-Content -Raw -Path "DNS.json" | ConvertFrom-Json
